@@ -1,5 +1,5 @@
 // Silence some warnings that could distract from the exercise
-#![allow(unused_variables, unused_mut, dead_code)]
+// #![allow(unused_variables, unused_mut, dead_code)]
 
 // Someone is shooting arrows at a target.  We need to classify the shots.
 //
@@ -9,22 +9,41 @@
 // - `Miss`
 //
 // You will need to complete 1b as well before you will be able to run this program successfully.
-
+enum Shot {
+    Bullseye,
+    Hit(f64),
+    Miss,
+}
 impl Shot {
     // Here is a method for the `Shot` enum you just defined.
-    fn points(self) -> i32 {
+    fn points(&self) -> i32 {
         // 1b. Implement this method to convert a Shot into points
         // - return 5 points if `self` is a `Shot::Bullseye`
         // - return 2 points if `self` is a `Shot::Hit(x)` where x < 3.0
         // - return 1 point if `self` is a `Shot::Hit(x)` where x >= 3.0
         // - return 0 points if `self` is a Miss
+        match self {
+            Shot::Bullseye => 5,
+            // This is the CPP way to handle this arm
+            // Self::Hit(x) => {
+            //     if x < 3.0 {
+            //         2
+            //     } else {
+            //         1
+            //     }
+            // }
+            // But we can use Guards ! (https://doc.rust-lang.org/rust-by-example/flow_control/match/guard.html)
+            Self::Hit(x) if *x < 3.0 => 2,
+            Self::Hit(_x) => 1,
+            Self::Miss => 0,
+        }
     }
 }
 
 fn main() {
     // Simulate shooting a bunch of arrows and gathering their coordinates on the target.
     let arrow_coords: Vec<Coord> = get_arrow_coords(5);
-    let mut shots: Vec<Shot> = Vec::new();
+    // let mut shots: Vec<Shot> = Vec::new();
 
     // 2. For each coord in arrow_coords:
     //
@@ -34,10 +53,47 @@ fn main() {
     //      - Less than 1.0 -- `Shot::Bullseye`
     //      - Between 1.0 and 5.0 -- `Shot::Hit(value)`
     //      - Greater than 5.0 -- `Shot::Miss`
+    let shots: Vec<Shot> = arrow_coords
+        .iter()
+        .map(|coord| {
+            // This is the CPP way to handle this arm
+            // if coord.distance_from_center() < 1.0 {
+            //     Shot::Bullseye
+            // } else if coord.distance_from_center() <= 5.0 {
+            //     Shot::Hit(coord.distance_from_center())
+            // } else {
+            //     Shot::Miss
+            // }
 
+            // We can use Guards!
+            match coord.distance_from_center() {
+                r if r < 1.0 => Shot::Bullseye,
+                r if r <= 5.0 => Shot::Hit(r),
+                _ => Shot::Miss,
+            }
+        })
+        .collect();
 
     let mut total = 0;
     // 3. Finally, loop through each shot in shots and add its points to total
+    // for shot in shots {
+    //     total += shot.points();
+    // }
+    // let temp: Vec<i32> =
+
+    // This is one way to get the sum of all the points
+    // total = shots
+    //     .iter()
+    //     .map(|shot| shot.points())
+    //     .collect::<Vec<i32>>()
+    //     .iter()
+    //     .sum();
+
+    // Another way: Using fold, is more idiomatic
+    total = shots
+        .iter()
+        .map(|shot| shot.points())
+        .fold(0, |total: i32, x| total + x);
 
     println!("Final point total is: {}", total);
 }
@@ -58,9 +114,9 @@ impl Coord {
             "coord is {:.1} away, at ({:.1}, {:.1})",
             self.distance_from_center(),
             self.x,
-            self.y);
+            self.y
+        );
     }
-
 }
 
 // Generate some random coordinates
