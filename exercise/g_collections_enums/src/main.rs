@@ -64,7 +64,7 @@ fn main() {
             // } else {
             //     Shot::Miss
             // }
-
+            coord.print_description();
             // We can use Guards!
             match coord.distance_from_center() {
                 r if r < 1.0 => Shot::Bullseye,
