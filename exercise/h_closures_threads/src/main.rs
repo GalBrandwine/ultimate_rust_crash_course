@@ -1,12 +1,17 @@
 // Silence some warnings so they don't distract from the exercise.
 #![allow(dead_code, unused_imports, unused_variables)]
-use crossbeam::channel;
-use std::thread;
+use core::fmt;
+use crossbeam::channel::{self, SendTimeoutError};
 use std::time::Duration;
+use std::{string, thread};
 
+/// .
 fn expensive_sum(v: Vec<i32>) -> i32 {
     pause_ms(500);
-    println!("Child thread: just about finished");
+    println!(
+        "Child thread: just about finished [{:?}]",
+        thread::current().id()
+    );
     // 1a. Between the .iter() and the .sum() add a .filter() with a closure to keep any even
     // number (`x % 2` will be 0 for even numbers).
     // 1b. Between the .filter() and the .sum() add a .map() with a closure to square the values
@@ -15,10 +20,7 @@ fn expensive_sum(v: Vec<i32>) -> i32 {
     // In the closures for both the .filter() and .map() the argument will be a reference, so you'll
     // either need to dereference the argument once in the parameter list like this: `|&x|` or you
     // will need to dereference it each time you use it in the expression like this: `*x`
-    v.iter()
-        // .filter() goes here
-        // .map() goes here
-        .sum()
+    v.iter().filter(|&x| x % 2 == 0).map(|&x| x.pow(2)).sum()
 }
 
 fn pause_ms(ms: u64) {
@@ -32,7 +34,7 @@ fn main() {
     // join handle in a variable called `handle`. Once you've done this you should be able to run
     // the code and see the Child thread output in the middle of the main thread's letters
     //
-    //let handle = ...
+    let handle = std::thread::spawn(|| expensive_sum(my_vector));
 
     // While the child thread is running, the main thread will also do some work
     for letter in vec!["a", "b", "c", "d", "e", "f"] {
@@ -45,8 +47,11 @@ fn main() {
     // to exit with a `Result<i32, Err>`.  Get the i32 out of the result and store it in a `sum`
     // variable.  Uncomment the println.  If you did 1a and 1b correctly, the sum should be 20.
     //
-    //let sum =
-    //println!("The child thread's expensive sum is {}", sum);
+    let sum = match handle.join() {
+        Ok(sum) => sum,
+        Err(err) => panic!("{:?}", err),
+    };
+    println!("The child thread's expensive sum is {}", sum);
 
     // Time for some fun with threads and channels!  Though there is a primitive type of channel
     // in the std::sync::mpsc module, I recommend always using channels from the crossbeam crate,
@@ -56,18 +61,20 @@ fn main() {
     // flow of execution works.  Once you understand it, alter the values passed to the `pause_ms()`
     // calls so that both the "Thread B" outputs occur before the "Thread A" outputs.
 
-    /*
     let (tx, rx) = channel::unbounded();
     // Cloning a channel makes another variable connected to that end of the channel so that you can
     // send it to another thread.
     let tx2 = tx.clone();
 
-    let handle_a = thread::spawn(move || {
-        pause_ms(0);
-        tx2.send("Thread A: 1").unwrap();
-        pause_ms(200);
-        tx2.send("Thread A: 2").unwrap();
-    });
+    let handle_a = thread::Builder::new()
+        .name("Test".into())
+        .spawn(move || {
+            pause_ms(400);
+            tx2.send("Thread A: 1").unwrap();
+            pause_ms(200);
+            tx2.send("Thread A: 2").unwrap();
+        })
+        .unwrap();
 
     pause_ms(100); // Make sure Thread A has time to get going before we spawn Thread B
 
@@ -89,12 +96,47 @@ fn main() {
     // Join the child threads for good hygiene.
     handle_a.join().unwrap();
     handle_b.join().unwrap();
-    */
 
     // Challenge: Make two child threads and give them each a receiving end to a channel.  From the
     // main thread loop through several values and print each out and then send it to the channel.
     // On the child threads print out the values you receive. Close the sending side in the main
     // thread by calling `drop(tx)` (assuming you named your sender channel variable `tx`).  Join
     // the child threads.
+    let (tx, rx) = channel::bounded(1);
+    // This call returns immediately because there is enough space in the channel.
+
+    let mut thread_handles = Vec::new();
+    for i in 0..2 {
+        let rxi = rx.clone();
+        println!("spawning thread #{}", i);
+        thread_handles.push(
+            thread::Builder::new()
+                .name(format!("Im thread {}", i))
+                .spawn(move || {
+                    pause_ms(1);
+                    let got = match rxi.recv_timeout(Duration::from_secs(1)) {
+                        Ok(res) => res,
+                        Err(err) => panic!("{}", err),
+                    };
+                    println!("Thread {i} Got: {}", got);
+                })
+                .unwrap(),
+        )
+    }
+    for val in 0..4 {
+        match tx.send_timeout(val, Duration::from_secs(1)) {
+            Ok(_) => {}
+            Err(err) => match err {
+                SendTimeoutError => {
+                    println!("No one is listening to me :(")
+                }
+                _ => panic!("{}", err),
+            },
+        }
+    }
+
+    for thread_handle in thread_handles {
+        thread_handle.join().unwrap();
+    }
     println!("Main thread: Exiting.")
 }
