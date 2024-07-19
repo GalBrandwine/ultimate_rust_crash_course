@@ -1,4 +1,3 @@
-use core::fmt;
 use crossterm::{
     cursor::{Hide, Show},
     event::{self, Event, KeyCode},
@@ -95,7 +94,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         if invaders.update(delta) {
             audio.play("move");
         }
-
+        if player.detect_hits(&mut invaders) {
+            audio.play("explode");
+        }
         // Draw & render
         let drawables: Vec<&dyn Drawable> = vec![&player, &invaders];
         for drawable in drawables {
